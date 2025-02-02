@@ -6,6 +6,7 @@ import { extractSkillsFromResume, generateJobRecommendations } from '../lib/ai';
 import { toast } from 'react-hot-toast';
 import JobRecommendations from './JobRecommendations';
 import type { JobRecommendation } from '../lib/ai';
+import type { Profile } from '../types/auth';
 
 export default function ResumeUpload() {
   const { profile, updateProfile } = useAuth();
@@ -13,8 +14,19 @@ export default function ResumeUpload() {
   const [isDragging, setIsDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [resumeData, setResumeData] = useState<{name: string, lastUpdated: string} | null>(null);
   const [recommendedJobs, setRecommendedJobs] = useState<JobRecommendation[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
+
+  // Load saved resume data on component mount
+  useEffect(() => {
+    if (profile?.resume) {
+      setResumeData({
+        name: profile.resume.name,
+        lastUpdated: profile.resume.lastUpdated
+      });
+    }
+  }, [profile]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -64,21 +76,40 @@ export default function ResumeUpload() {
       // Extract skills using AI
       const extractedSkills = await extractSkillsFromResume(text);
       
-      // Update profile with extracted skills
+      // Create updated profile data
+      const updatedProfileData: Profile = {
+        ...profile!,
+        skills: Array.from(new Set([...(profile?.skills || []), ...extractedSkills])),
+        resume: {
+          name: file.name,
+          lastUpdated: new Date().toISOString(),
+          content: text
+        }
+      };
+      
+      // Update profile with extracted skills and resume data
       const users = JSON.parse(localStorage.getItem('local_users') || '[]');
       const updatedUsers = users.map((u: any) => {
         if (u.id === profile?.id) {
           return {
             ...u,
-            profile: {
-              ...u.profile,
-              skills: Array.from(new Set([...(u.profile.skills || []), ...extractedSkills])),
-            },
+            profile: updatedProfileData
           };
         }
         return u;
       });
+      
+      // Update localStorage
       localStorage.setItem('local_users', JSON.stringify(updatedUsers));
+      
+      // Update AuthContext
+      updateProfile(updatedProfileData);
+
+      // Update local state
+      setResumeData({
+        name: file.name,
+        lastUpdated: new Date().toISOString()
+      });
 
       // Generate job recommendations
       setLoadingJobs(true);
@@ -96,7 +127,34 @@ export default function ResumeUpload() {
   };
 
   const handleRemoveResume = () => {
+    if (!profile?.id) return;
+
+    // Create updated profile without resume
+    const updatedProfileData = { ...profile };
+    delete updatedProfileData.resume;
+
+    // Remove resume data from localStorage
+    const users = JSON.parse(localStorage.getItem('local_users') || '[]');
+    const updatedUsers = users.map((u: any) => {
+      if (u.id === profile.id) {
+        return {
+          ...u,
+          profile: updatedProfileData
+        };
+      }
+      return u;
+    });
+    
+    // Update localStorage
+    localStorage.setItem('local_users', JSON.stringify(updatedUsers));
+    
+    // Update AuthContext
+    updateProfile(updatedProfileData);
+
+    // Clear local state
     setUploadedFile(null);
+    setResumeData(null);
+    toast.success('Resume removed successfully');
   };
 
   const readFileContent = (file: File): Promise<string> => {
@@ -133,19 +191,29 @@ export default function ResumeUpload() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
               <p className="text-gray-600">Processing your resume...</p>
             </div>
-          ) : uploadedFile ? (
+          ) : resumeData ? (
             <div className="flex flex-col items-center space-y-3">
               <CheckCircleIcon className="h-8 w-8 text-green-500" />
               <div>
-                <p className="font-medium text-gray-900">{uploadedFile.name}</p>
-                <p className="text-sm text-gray-500">Resume processed successfully</p>
+                <p className="font-medium text-gray-900">{resumeData.name}</p>
+                <p className="text-sm text-gray-500">
+                  Last updated: {new Date(resumeData.lastUpdated).toLocaleDateString()}
+                </p>
               </div>
-              <button
-                onClick={() => setUploadedFile(null)}
-                className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
-              >
-                Upload another resume
-              </button>
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => setUploadedFile(null)}
+                  className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                >
+                  Upload new resume
+                </button>
+                <button
+                  onClick={handleRemoveResume}
+                  className="text-red-600 hover:text-red-700 text-sm font-medium"
+                >
+                  Remove resume
+                </button>
+              </div>
             </div>
           ) : (
             <>

@@ -38,6 +38,29 @@ export default function NetworkSection() {
     toast.success(`Removed ${connectionName} from your network`);
   };
 
+  const handleStartConversation = (connection: Connection) => {
+    // Initialize or update messages in localStorage
+    const messages = JSON.parse(localStorage.getItem('messages') || '[]');
+    
+    // Check if a conversation already exists
+    const existingConversation = messages.some((msg: any) => msg.connectionId === connection.id);
+    
+    if (!existingConversation) {
+      // Add an empty conversation to localStorage
+      const initialMessage = {
+        id: Date.now().toString(),
+        connectionId: connection.id,
+        senderId: connection.user.id,
+        content: '',
+        timestamp: new Date(),
+        read: false,
+        sender: connection.user
+      };
+      messages.push(initialMessage);
+      localStorage.setItem('messages', JSON.stringify(messages));
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
       <div className="flex items-center justify-between mb-6">
@@ -59,7 +82,9 @@ export default function NetworkSection() {
             <div key={connection.id} className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="h-12 w-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                  <UsersIcon className="h-6 w-6 text-indigo-600" />
+                  <span className="text-indigo-600 font-medium">
+                    {otherPerson.full_name[0]}
+                  </span>
                 </div>
                 <div>
                   <h3 className="font-medium text-gray-900">{otherPerson.full_name}</h3>
@@ -71,6 +96,7 @@ export default function NetworkSection() {
                 <Link
                   to={`/messages/${connection.id}`}
                   className="p-2 text-gray-400 hover:text-indigo-600"
+                  onClick={() => handleStartConversation(connection)}
                 >
                   <MessageCircleIcon className="h-5 w-5" />
                 </Link>

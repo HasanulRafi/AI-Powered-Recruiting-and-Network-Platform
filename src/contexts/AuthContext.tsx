@@ -1,21 +1,9 @@
 import React, { createContext, useContext, useState } from 'react';
+import type { Profile } from '../types/auth';
 
 interface User {
   id: string;
   email: string;
-}
-
-interface Profile {
-  id: string;
-  role: 'recruiter' | 'applicant';
-  full_name: string;
-  headline?: string;
-  bio?: string;
-  company?: string | null;
-  location?: string;
-  skills?: string[];
-  experience?: any[];
-  education?: any[];
 }
 
 interface AuthContextType {

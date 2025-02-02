@@ -26,50 +26,103 @@ interface Connection {
   };
 }
 
-// Initialize messages with just one message from Sarah Wilson
-const initialMessages = [{
-  id: 'initial-message',
-  connectionId: 'f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h',
-  senderId: 'd7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f',
-  content: 'Hi! I noticed your profile and wanted to reach out about a position that aligns with your skills. Would you be interested in learning more?',
-  timestamp: new Date(Date.now() - 3600000),
-  read: false,
-  sender: {
-    id: 'd7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f',
-    full_name: 'Sarah Wilson',
-    role: 'recruiter',
-    headline: 'Senior Recruiter',
-    company: 'Tech Corp'
+// Initialize messages with a conversation between recruiter and job seeker
+const initialMessages = [
+  {
+    id: 'msg-1',
+    connectionId: 'f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h',
+    senderId: 'd7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f',
+    content: 'Hi! I noticed your profile and wanted to reach out about a position that aligns with your skills. Would you be interested in learning more?',
+    timestamp: new Date(Date.now() - 3600000),
+    read: false,
+    sender: {
+      id: 'd7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f',
+      full_name: 'Sarah Wilson',
+      role: 'recruiter',
+      headline: 'Senior Recruiter',
+      company: 'Tech Corp'
+    }
+  },
+  {
+    id: 'msg-2',
+    connectionId: 'f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h',
+    senderId: 'e8c6f6c6-9d8g-5d8g-9d8g-9d8g9d8g9d8g',
+    content: 'Yes, I would be very interested! Could you tell me more about the position?',
+    timestamp: new Date(Date.now() - 3000000),
+    read: true,
+    sender: {
+      id: 'e8c6f6c6-9d8g-5d8g-9d8g-9d8g9d8g9d8g',
+      full_name: 'John Doe',
+      role: 'job_seeker',
+      headline: 'Software Engineer',
+      company: 'Tech Corp'
+    }
+  },
+  {
+    id: 'msg-3',
+    connectionId: 'f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h',
+    senderId: 'd7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f',
+    content: "We're looking for a Senior Software Engineer with your exact skill set. The role offers competitive compensation and great benefits. Would you be available for a quick chat this week?",
+    timestamp: new Date(Date.now() - 2400000),
+    read: true,
+    sender: {
+      id: 'd7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f',
+      full_name: 'Sarah Wilson',
+      role: 'recruiter',
+      headline: 'Senior Recruiter',
+      company: 'Tech Corp'
+    }
   }
-}];
-localStorage.setItem('messages', JSON.stringify(initialMessages));
+];
+
+// Only set initial messages if they don't exist
+if (!localStorage.getItem('messages')) {
+  localStorage.setItem('messages', JSON.stringify(initialMessages));
+}
 
 export default function Messages() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const { connectionId } = useParams();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [newMessage, setNewMessage] = useState('');
+  const [currentConnection, setCurrentConnection] = useState<Connection | null>(null);
 
   useEffect(() => {
     if (!profile) {
       navigate('/auth');
       return;
     }
+
+    // Load connections
+    const storedConnections = JSON.parse(localStorage.getItem('connections') || '[]');
+    setConnections(storedConnections);
+
     // Load messages from localStorage
     const storedMessages = JSON.parse(localStorage.getItem('messages') || '[]');
-    // Only show messages for the initial connection
-    const filteredMessages = storedMessages.filter(
-      (msg: Message) => msg.connectionId === 'f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h'
-    );
-    setMessages(filteredMessages);
+    
+    if (connectionId) {
+      // Filter messages for current conversation
+      const filteredMessages = storedMessages.filter(
+        (msg: Message) => msg.connectionId === connectionId
+      );
+      setMessages(filteredMessages);
+
+      // Set current connection
+      const connection = storedConnections.find((conn: Connection) => conn.id === connectionId);
+      setCurrentConnection(connection || null);
+    } else {
+      setMessages([]);
+    }
+    
     setLoading(false);
-  }, [profile, navigate]);
+  }, [profile, navigate, connectionId]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !profile || !connectionId) return;
+    if (!newMessage.trim() || !profile || !connectionId || !currentConnection) return;
 
     const newMessageObj = {
       id: Date.now().toString(),
@@ -77,12 +130,29 @@ export default function Messages() {
       senderId: profile.id,
       content: newMessage,
       timestamp: new Date(),
-      read: false
+      read: false,
+      sender: {
+        id: profile.id,
+        full_name: profile.full_name,
+        role: profile.role,
+        headline: profile.headline || '',
+        company: profile.company || ''
+      }
     };
 
-    const updatedMessages = [...messages, newMessageObj];
-    setMessages(updatedMessages);
-    localStorage.setItem('messages', JSON.stringify(updatedMessages));
+    // Get all existing messages from localStorage
+    const allMessages = JSON.parse(localStorage.getItem('messages') || '[]');
+    
+    // Add new message to all messages
+    const updatedAllMessages = [...allMessages, newMessageObj];
+    
+    // Update localStorage with all messages
+    localStorage.setItem('messages', JSON.stringify(updatedAllMessages));
+    
+    // Update current conversation messages
+    const updatedConversationMessages = [...messages, newMessageObj];
+    setMessages(updatedConversationMessages);
+    
     setNewMessage('');
   };
 
@@ -123,37 +193,44 @@ export default function Messages() {
               )}
               <MessageCircleIcon className="h-6 w-6 text-indigo-600" />
               <h1 className="text-2xl font-bold text-gray-900">
-                {connectionId ? 'Chat with Sarah Wilson' : 'Messages'}
+                {connectionId && currentConnection 
+                  ? `Chat with ${currentConnection.user.full_name}` 
+                  : 'Messages'}
               </h1>
             </div>
           </div>
         </div>
 
         <div className="divide-y">
-          {!connectionId && (
-            <Link
-              to={`/messages/${'f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h'}`}
-              className="block p-4 hover:bg-gray-50"
-            >
-              <div className="flex items-center space-x-3">
-                <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                    <span className="text-indigo-600 font-medium">
-                      {initialMessages[0].sender.full_name[0]}
-                    </span>
+          {!connectionId && connections.map(connection => {
+            if (!connection?.user?.full_name) return null;
+            
+            return (
+              <Link
+                key={connection.id}
+                to={`/messages/${connection.id}`}
+                className="block p-4 hover:bg-gray-50"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="flex-shrink-0">
+                    <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                      <span className="text-indigo-600 font-medium">
+                        {connection.user.full_name[0] || '?'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {connection.user.full_name}
+                    </p>
+                    <p className="text-sm text-gray-500 truncate">
+                      {connection.user.headline || 'No headline'}
+                    </p>
                   </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {initialMessages[0].sender.full_name}
-                  </p>
-                  <p className="text-sm text-gray-500 truncate">
-                    {initialMessages[0].sender.headline}
-                  </p>
-                </div>
-              </div>
-            </Link>
-          )}
+              </Link>
+            );
+          })}
 
           {connectionId && (
             <div className="flex flex-col h-[500px]">
@@ -201,7 +278,7 @@ export default function Messages() {
             </div>
           )}
 
-          {!connectionId && !initialMessages && (
+          {!connectionId && connections.length === 0 && (
             <div className="p-6 text-center text-gray-500">
               No messages yet
             </div>
