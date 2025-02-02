@@ -14,7 +14,7 @@ import EndorsementsSection from '../components/EndorsementsSection';
 import RecommendationsSection from '../components/RecommendationsSection';
 
 export default function Profile() {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, updateProfile, loading: authLoading } = useAuth();
   const { aiEnabled } = useAI();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -75,21 +75,7 @@ export default function Profile() {
 
     setLoading(true);
     try {
-      // Update profile in local storage
-      const users = JSON.parse(localStorage.getItem('local_users') || '[]');
-      const updatedUsers = users.map((u: any) => {
-        if (u.id === user.id) {
-          return {
-            ...u,
-            profile: {
-              ...u.profile,
-              ...formData,
-            },
-          };
-        }
-        return u;
-      });
-      localStorage.setItem('local_users', JSON.stringify(updatedUsers));
+      await updateProfile(formData);
       toast.success('Profile updated successfully!');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'An error occurred');
@@ -98,9 +84,21 @@ export default function Profile() {
     }
   };
 
-  const handleSkillChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSkillChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const skills = e.target.value.split(',').map(skill => skill.trim());
     setFormData(prev => ({ ...prev, skills }));
+    
+    // Update profile immediately when skills change
+    if (profile) {
+      try {
+        await updateProfile({
+          ...profile,
+          skills
+        });
+      } catch (error) {
+        console.error('Error updating skills:', error);
+      }
+    }
   };
 
   const addExperience = () => {
@@ -169,12 +167,27 @@ export default function Profile() {
               {skillSuggestions.map((skill, index) => (
                 <button
                   key={index}
-                  onClick={() => {
+                  onClick={async () => {
+                    const updatedSkills = [...formData.skills, skill];
+                    // Update local state
                     setFormData(prev => ({
                       ...prev,
-                      skills: [...prev.skills, skill]
+                      skills: updatedSkills
                     }));
-                    toast.success(`Added ${skill} to your skills`);
+                    
+                    // Update profile
+                    if (profile) {
+                      try {
+                        await updateProfile({
+                          ...profile,
+                          skills: updatedSkills
+                        });
+                        toast.success(`Added ${skill} to your skills`);
+                      } catch (error) {
+                        console.error('Error updating skills:', error);
+                        toast.error('Failed to add skill');
+                      }
+                    }
                   }}
                   className="inline-flex items-center px-3 py-1 rounded-full bg-white text-indigo-700 text-sm font-medium hover:bg-indigo-100"
                 >

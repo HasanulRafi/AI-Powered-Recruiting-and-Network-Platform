@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAI } from '../contexts/AIContext';
 import { FileTextIcon, UploadCloudIcon, CheckCircleIcon, AlertCircleIcon } from 'lucide-react';
@@ -6,11 +6,26 @@ import { extractSkillsFromResume } from '../lib/ai';
 import { toast } from 'react-hot-toast';
 
 export default function ResumeUpload() {
-  const { profile } = useAuth();
+  const { profile, updateProfile } = useAuth();
   const { aiEnabled } = useAI();
   const [isDragging, setIsDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [currentSkills, setCurrentSkills] = useState<string[]>([]);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(() => {
+    // Try to restore uploaded file state from localStorage
+    const savedFileName = localStorage.getItem('uploaded_resume_name');
+    if (savedFileName) {
+      return new File([], savedFileName);
+    }
+    return null;
+  });
+
+  // Update local skills state when profile changes
+  useEffect(() => {
+    if (profile?.skills) {
+      setCurrentSkills(profile.skills);
+    }
+  }, [profile?.skills]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -59,28 +74,35 @@ export default function ResumeUpload() {
       // Extract skills using AI
       const extractedSkills = await extractSkillsFromResume(text);
       
-      // Update profile with extracted skills
-      const users = JSON.parse(localStorage.getItem('local_users') || '[]');
-      const updatedUsers = users.map((u: any) => {
-        if (u.id === profile?.id) {
-          return {
-            ...u,
-            profile: {
-              ...u.profile,
-              skills: Array.from(new Set([...(u.profile.skills || []), ...extractedSkills])),
-            },
-          };
-        }
-        return u;
-      });
-      localStorage.setItem('local_users', JSON.stringify(updatedUsers));
-
-      toast.success('Resume processed successfully! Skills have been updated.');
+      if (profile) {
+        // Create a Set to remove duplicates and convert back to array
+        const newSkills = Array.from(new Set([...currentSkills, ...extractedSkills]));
+        
+        // Save the file name to localStorage
+        localStorage.setItem('uploaded_resume_name', file.name);
+        
+        // Update local state immediately
+        setCurrentSkills(newSkills);
+        
+        // Update profile with new skills while preserving other profile data
+        await updateProfile({
+          ...profile,
+          skills: newSkills
+        });
+        
+        toast.success('Resume processed successfully! Skills have been updated.');
+      }
     } catch (error) {
       toast.error('Error processing resume');
+      console.error('Resume processing error:', error);
     } finally {
       setProcessing(false);
     }
+  };
+
+  const handleRemoveResume = () => {
+    setUploadedFile(null);
+    localStorage.removeItem('uploaded_resume_name');
   };
 
   const readFileContent = (file: File): Promise<string> => {
@@ -124,7 +146,7 @@ export default function ResumeUpload() {
               <p className="text-sm text-gray-500">Resume processed successfully</p>
             </div>
             <button
-              onClick={() => setUploadedFile(null)}
+              onClick={handleRemoveResume}
               className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
             >
               Upload another resume

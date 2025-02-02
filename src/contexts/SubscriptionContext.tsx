@@ -67,8 +67,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const { user } = useAuth();
   const [currentPlan, setCurrentPlan] = useState<Plan>(() => {
     const saved = localStorage.getItem('user_plan');
-    return saved ? plans.find(p => p.id === JSON.parse(saved)) || plans[0] : plans[0];
+    return saved ? (plans.find(p => p.id === saved) || plans[0]) : plans[0];
   });
+  
   const [aiCredits, setAiCredits] = useState(() => {
     const saved = localStorage.getItem('ai_credits');
     return saved ? parseInt(saved, 10) : currentPlan.aiCredits;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getConnections, getMessages, createMessage } from '../lib/store';
+import { getConnections, getMessages, createMessage, subscribeToMessages } from '../lib/database';
 import { toast } from 'react-hot-toast';
 import { MessageCircleIcon, SendIcon } from 'lucide-react';
 import { format } from 'date-fns';
@@ -26,14 +26,21 @@ export default function Messages() {
   useEffect(() => {
     if (selectedConnection) {
       fetchMessages();
+      // Subscribe to new messages
+      const subscription = subscribeToMessages(selectedConnection.id, (payload) => {
+        const newMessage = payload.new;
+        setMessages(prev => [...prev, newMessage]);
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
     }
   }, [selectedConnection]);
 
   const fetchConnections = async () => {
     try {
-      const data = getConnections().filter(
-        (conn: any) => conn.recruiter_id === user!.id || conn.applicant_id === user!.id
-      );
+      const data = await getConnections(user!.id);
       setConnections(data || []);
       setLoading(false);
     } catch (error) {
@@ -44,9 +51,7 @@ export default function Messages() {
 
   const fetchMessages = async () => {
     try {
-      const data = getMessages()
-        .filter((msg: any) => msg.connection_id === selectedConnection.id)
-        .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      const data = await getMessages(selectedConnection.id);
       setMessages(data || []);
     } catch (error) {
       toast.error('Error fetching messages');
@@ -58,13 +63,11 @@ export default function Messages() {
     if (!newMessage.trim()) return;
 
     try {
-      const message = createMessage({
+      await createMessage({
         connection_id: selectedConnection.id,
         sender_id: user!.id,
-        sender: profile,
         content: newMessage.trim(),
       });
-      setMessages(prev => [...prev, message]);
       setNewMessage('');
     } catch (error) {
       toast.error('Error sending message');
@@ -72,7 +75,7 @@ export default function Messages() {
   };
 
   const getConnectionName = (connection: any) => {
-    const otherPerson = connection.recruiter.id === user!.id
+    const otherPerson = connection.recruiter_id === user!.id
       ? connection.applicant
       : connection.recruiter;
     return otherPerson.full_name;
