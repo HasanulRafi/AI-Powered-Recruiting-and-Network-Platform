@@ -202,6 +202,40 @@ export default function Profile() {
     );
   };
 
+  const handleSave = () => {
+    // Save profile changes
+    const updatedProfile = {
+      ...profile,
+      full_name: formData.full_name,
+      headline: formData.headline,
+      bio: formData.bio,
+      experience: formData.experience,
+      education: formData.education,
+      skills: formData.skills,
+      location: formData.location
+    };
+    localStorage.setItem('profile', JSON.stringify(updatedProfile));
+
+    // Only create notifications when profile is actually updated
+    if (profile?.role === 'applicant') {
+      const notifications = JSON.parse(localStorage.getItem('notifications') || '[]');
+      const newNotification = {
+        id: Date.now().toString(),
+        type: 'ai' as const,
+        title: 'Salary Insights Updated',
+        description: 'Your salary insights have been updated based on your latest profile changes.',
+        timestamp: new Date(),
+        read: false,
+        actionUrl: '/profile'
+      };
+      notifications.push(newNotification);
+      localStorage.setItem('notifications', JSON.stringify(notifications));
+    }
+
+    setLoading(false);
+    toast.success('Profile updated successfully');
+  };
+
   if (!user || !profile) return null;
 
   return (

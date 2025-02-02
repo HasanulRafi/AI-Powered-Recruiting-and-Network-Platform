@@ -29,6 +29,7 @@ function App() {
                   <Route path="/" element={<Home />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/messages" element={<Messages />} />
+                  <Route path="/messages/:connectionId" element={<Messages />} />
                   <Route path="/jobs" element={<Jobs />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/ai-settings" element={<AISettings />} />

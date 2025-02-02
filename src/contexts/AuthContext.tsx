@@ -11,7 +11,7 @@ interface Profile {
   full_name: string;
   headline?: string;
   bio?: string;
-  company?: string;
+  company?: string | null;
   location?: string;
   skills?: string[];
   experience?: any[];
@@ -75,19 +75,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Email already in use');
       }
 
+      // Use sample UUIDs for testing
+      const id = role === 'recruiter' 
+        ? 'd7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f'  // Sarah Wilson (recruiter)
+        : 'e8c6f6c6-9d8g-5d8g-9d8g-9d8g9d8g9d8g';  // John Doe (applicant)
+
       const newUser = {
-        id: Math.random().toString(36).substr(2, 9),
+        id,
         email,
         password,
         profile: {
-          id: Math.random().toString(36).substr(2, 9),
+          id,
           role,
-          full_name: email.split('@')[0],
-        },
+          full_name: role === 'recruiter' ? 'Sarah Wilson' : 'John Doe',
+          headline: role === 'recruiter' ? 'Senior Recruiter' : 'Software Engineer',
+          company: role === 'recruiter' ? 'Tech Corp' : null,
+        } as Profile,
       };
 
       users.push(newUser);
       localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+      // Auto sign in after signup
+      const userData = { id: newUser.id, email: newUser.email };
+      setUser(userData);
+      setProfile(newUser.profile);
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userData));
     } finally {
       setLoading(false);
     }

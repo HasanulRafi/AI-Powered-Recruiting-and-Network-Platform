@@ -1,16 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getConnections } from '../lib/store';
-import { UsersIcon, UserPlusIcon, MessageCircleIcon } from 'lucide-react';
+import { UsersIcon, UserPlusIcon, MessageCircleIcon, UserMinusIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+
+interface Connection {
+  id: string;
+  status: string;
+  timestamp: Date;
+  user: {
+    id: string;
+    full_name: string;
+    role: string;
+    headline: string;
+    company: string;
+  };
+}
 
 export default function NetworkSection() {
   const { profile } = useAuth();
-  const [connections] = useState(() => getConnections());
+  const [connections, setConnections] = useState<Connection[]>([]);
 
-  const myConnections = connections.filter(
-    (conn: any) => conn.recruiter_id === profile?.id || conn.applicant_id === profile?.id
-  );
+  useEffect(() => {
+    // Load connections from localStorage and ensure they match the expected structure
+    const storedConnections = JSON.parse(localStorage.getItem('connections') || '[]');
+    const validConnections = storedConnections.filter((conn: any) => 
+      conn && conn.user && conn.user.full_name && conn.user.headline
+    );
+    setConnections(validConnections);
+  }, []); // Empty dependency array means this runs once on mount
+
+  const handleRemoveConnection = (connectionId: string, connectionName: string) => {
+    // Remove from local state and localStorage
+    const updatedConnections = connections.filter(conn => conn.id !== connectionId);
+    setConnections(updatedConnections);
+    localStorage.setItem('connections', JSON.stringify(updatedConnections));
+    toast.success(`Removed ${connectionName} from your network`);
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
@@ -20,15 +46,14 @@ export default function NetworkSection() {
           <h2 className="text-xl font-semibold">My Network</h2>
         </div>
         <span className="text-sm text-gray-500">
-          {myConnections.length} connections
+          {connections.length} connections
         </span>
       </div>
 
       <div className="space-y-4">
-        {myConnections.map((connection: any) => {
-          const otherPerson = connection.recruiter_id === profile?.id
-            ? connection.applicant
-            : connection.recruiter;
+        {connections.map((connection) => {
+          const otherPerson = connection.user;
+          if (!otherPerson) return null;
 
           return (
             <div key={connection.id} className="flex items-center justify-between">
@@ -39,21 +64,29 @@ export default function NetworkSection() {
                 <div>
                   <h3 className="font-medium text-gray-900">{otherPerson.full_name}</h3>
                   <p className="text-sm text-gray-500">{otherPerson.headline}</p>
+                  <p className="text-xs text-gray-500">{otherPerson.company}</p>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
                 <Link
-                  to="/messages"
+                  to={`/messages/${connection.id}`}
                   className="p-2 text-gray-400 hover:text-indigo-600"
                 >
                   <MessageCircleIcon className="h-5 w-5" />
                 </Link>
+                <button
+                  onClick={() => handleRemoveConnection(connection.id, otherPerson.full_name)}
+                  className="p-2 text-gray-400 hover:text-red-600"
+                  title="Remove connection"
+                >
+                  <UserMinusIcon className="h-5 w-5" />
+                </button>
               </div>
             </div>
           );
         })}
 
-        {myConnections.length === 0 && (
+        {connections.length === 0 && (
           <div className="text-center py-8">
             <UserPlusIcon className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No connections yet</h3>

@@ -42,7 +42,6 @@ export default function SalaryInsights() {
     try {
       const data = getSalaryBenchmarks(title, loc, years);
       setInsights(data);
-      toast.success('Salary insights updated!');
     } catch (error) {
       toast.error('Error updating salary insights');
     } finally {

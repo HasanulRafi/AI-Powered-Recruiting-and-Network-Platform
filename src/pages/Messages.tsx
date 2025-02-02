@@ -1,185 +1,209 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getConnections, getMessages, createMessage, subscribeToMessages } from '../lib/database';
-import { toast } from 'react-hot-toast';
-import { MessageCircleIcon, SendIcon } from 'lucide-react';
+import { MessageCircleIcon, ArrowLeftIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
+interface Message {
+  id: string;
+  connectionId: string;
+  senderId: string;
+  content: string;
+  timestamp: Date;
+  read: boolean;
+}
+
+interface Connection {
+  id: string;
+  status: string;
+  timestamp: Date;
+  user: {
+    id: string;
+    full_name: string;
+    role: string;
+    headline: string;
+    company: string;
+  };
+}
+
+// Initialize messages with just one message from Sarah Wilson
+const initialMessages = [{
+  id: 'initial-message',
+  connectionId: 'f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h',
+  senderId: 'd7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f',
+  content: 'Hi! I noticed your profile and wanted to reach out about a position that aligns with your skills. Would you be interested in learning more?',
+  timestamp: new Date(Date.now() - 3600000),
+  read: false,
+  sender: {
+    id: 'd7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f',
+    full_name: 'Sarah Wilson',
+    role: 'recruiter',
+    headline: 'Senior Recruiter',
+    company: 'Tech Corp'
+  }
+}];
+localStorage.setItem('messages', JSON.stringify(initialMessages));
+
 export default function Messages() {
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const navigate = useNavigate();
-  const [connections, setConnections] = useState<any[]>([]);
-  const [selectedConnection, setSelectedConnection] = useState<any>(null);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [newMessage, setNewMessage] = useState('');
+  const { connectionId } = useParams();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [newMessage, setNewMessage] = useState('');
 
   useEffect(() => {
-    if (!user) {
+    if (!profile) {
       navigate('/auth');
       return;
     }
-    fetchConnections();
-  }, [user, navigate]);
+    // Load messages from localStorage
+    const storedMessages = JSON.parse(localStorage.getItem('messages') || '[]');
+    // Only show messages for the initial connection
+    const filteredMessages = storedMessages.filter(
+      (msg: Message) => msg.connectionId === 'f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h'
+    );
+    setMessages(filteredMessages);
+    setLoading(false);
+  }, [profile, navigate]);
 
-  useEffect(() => {
-    if (selectedConnection) {
-      fetchMessages();
-      // Subscribe to new messages
-      const subscription = subscribeToMessages(selectedConnection.id, (payload) => {
-        const newMessage = payload.new;
-        setMessages(prev => [...prev, newMessage]);
-      });
-
-      return () => {
-        subscription.unsubscribe();
-      };
-    }
-  }, [selectedConnection]);
-
-  const fetchConnections = async () => {
-    try {
-      const data = await getConnections(user!.id);
-      setConnections(data || []);
-      setLoading(false);
-    } catch (error) {
-      toast.error('Error fetching connections');
-      setLoading(false);
-    }
-  };
-
-  const fetchMessages = async () => {
-    try {
-      const data = await getMessages(selectedConnection.id);
-      setMessages(data || []);
-    } catch (error) {
-      toast.error('Error fetching messages');
-    }
-  };
-
-  const sendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !profile || !connectionId) return;
 
-    try {
-      await createMessage({
-        connection_id: selectedConnection.id,
-        sender_id: user!.id,
-        content: newMessage.trim(),
-      });
-      setNewMessage('');
-    } catch (error) {
-      toast.error('Error sending message');
-    }
+    const newMessageObj = {
+      id: Date.now().toString(),
+      connectionId,
+      senderId: profile.id,
+      content: newMessage,
+      timestamp: new Date(),
+      read: false
+    };
+
+    const updatedMessages = [...messages, newMessageObj];
+    setMessages(updatedMessages);
+    localStorage.setItem('messages', JSON.stringify(updatedMessages));
+    setNewMessage('');
   };
 
-  const getConnectionName = (connection: any) => {
-    const otherPerson = connection.recruiter_id === user!.id
-      ? connection.applicant
-      : connection.recruiter;
-    return otherPerson.full_name;
-  };
+  if (!profile) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="bg-white rounded-lg shadow-sm p-6 text-center">
+          <MessageCircleIcon className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-lg font-medium text-gray-900">Please sign in to view messages</h3>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="bg-white rounded-lg shadow-sm p-6 text-center">
+          <div className="animate-pulse">Loading messages...</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className="bg-white rounded-lg shadow-lg h-[calc(100vh-12rem)] flex">
-        {/* Connections List */}
-        <div className="w-1/3 border-r">
-          <div className="p-4 border-b">
-            <h2 className="text-xl font-semibold">Messages</h2>
-          </div>
-          <div className="overflow-y-auto h-[calc(100%-4rem)]">
-            {connections.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">
-                No connections yet
-              </div>
-            ) : (
-              connections.map(connection => (
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="bg-white rounded-lg shadow-sm">
+        <div className="p-6 border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              {connectionId && (
                 <button
-                  key={connection.id}
-                  onClick={() => setSelectedConnection(connection)}
-                  className={`w-full p-4 text-left hover:bg-gray-50 flex items-center space-x-3 ${
-                    selectedConnection?.id === connection.id ? 'bg-gray-50' : ''
-                  }`}
+                  onClick={() => navigate('/messages')}
+                  className="p-2 hover:bg-gray-100 rounded-full"
                 >
-                  <div className="flex-shrink-0">
-                    <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                      <MessageCircleIcon className="h-6 w-6 text-indigo-600" />
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="font-medium">{getConnectionName(connection)}</h3>
-                    <p className="text-sm text-gray-500">
-                      {connection.recruiter.id === user!.id ? 'Applicant' : 'Recruiter'}
-                    </p>
-                  </div>
+                  <ArrowLeftIcon className="h-5 w-5 text-gray-500" />
                 </button>
-              ))
-            )}
+              )}
+              <MessageCircleIcon className="h-6 w-6 text-indigo-600" />
+              <h1 className="text-2xl font-bold text-gray-900">
+                {connectionId ? 'Chat with Sarah Wilson' : 'Messages'}
+              </h1>
+            </div>
           </div>
         </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 flex flex-col">
-          {selectedConnection ? (
-            <>
-              <div className="p-4 border-b">
-                <h3 className="font-medium">{getConnectionName(selectedConnection)}</h3>
+        <div className="divide-y">
+          {!connectionId && (
+            <Link
+              to={`/messages/${'f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h'}`}
+              className="block p-4 hover:bg-gray-50"
+            >
+              <div className="flex items-center space-x-3">
+                <div className="flex-shrink-0">
+                  <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <span className="text-indigo-600 font-medium">
+                      {initialMessages[0].sender.full_name[0]}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {initialMessages[0].sender.full_name}
+                  </p>
+                  <p className="text-sm text-gray-500 truncate">
+                    {initialMessages[0].sender.headline}
+                  </p>
+                </div>
               </div>
+            </Link>
+          )}
+
+          {connectionId && (
+            <div className="flex flex-col h-[500px]">
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.map(message => (
                   <div
                     key={message.id}
-                    className={`flex ${message.sender.id === user!.id ? 'justify-end' : 'justify-start'}`}
+                    className={`flex ${
+                      message.senderId === profile.id ? 'justify-end' : 'justify-start'
+                    }`}
                   >
                     <div
-                      className={`max-w-[70%] rounded-lg p-3 ${
-                        message.sender.id === user!.id
+                      className={`rounded-lg px-4 py-2 max-w-[70%] ${
+                        message.senderId === profile.id
                           ? 'bg-indigo-600 text-white'
                           : 'bg-gray-100 text-gray-900'
                       }`}
                     >
-                      <p>{message.content}</p>
-                      <p className={`text-xs mt-1 ${
-                        message.sender.id === user!.id ? 'text-indigo-100' : 'text-gray-500'
-                      }`}>
-                        {format(new Date(message.created_at), 'p')}
+                      <p className="text-sm">{message.content}</p>
+                      <p className="text-xs mt-1 opacity-75">
+                        {format(new Date(message.timestamp), 'MMM d, h:mm a')}
                       </p>
                     </div>
                   </div>
                 ))}
               </div>
-              <form onSubmit={sendMessage} className="p-4 border-t">
-                <div className="flex space-x-2">
+
+              <form onSubmit={handleSendMessage} className="p-4 border-t">
+                <div className="flex space-x-4">
                   <input
                     type="text"
                     value={newMessage}
-                    onChange={e => setNewMessage(e.target.value)}
-                    placeholder="Type a message..."
-                    className="flex-1 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                   />
                   <button
                     type="submit"
-                    disabled={!newMessage.trim()}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
-                    <SendIcon className="h-5 w-5" />
+                    Send
                   </button>
                 </div>
               </form>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-500">
-              Select a conversation to start messaging
+            </div>
+          )}
+
+          {!connectionId && !initialMessages && (
+            <div className="p-6 text-center text-gray-500">
+              No messages yet
             </div>
           )}
         </div>

@@ -23,40 +23,39 @@ CREATE TYPE user_role AS ENUM ('recruiter', 'applicant');
 
 -- Profiles table
 CREATE TABLE IF NOT EXISTS profiles (
-  id uuid PRIMARY KEY REFERENCES auth.users(id),
-  role user_role NOT NULL,
-  full_name text NOT NULL,
-  headline text,
-  bio text,
-  company text, -- For recruiters
-  location text,
-  skills text[], -- For applicants
-  experience jsonb, -- For applicants
-  education jsonb, -- For applicants
-  avatar_url text,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  role TEXT NOT NULL CHECK (role IN ('recruiter', 'applicant')),
+  full_name TEXT NOT NULL,
+  headline TEXT,
+  bio TEXT,
+  company TEXT,
+  location TEXT,
+  skills TEXT[],
+  experience JSONB,
+  education JSONB,
+  avatar_url TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
 
 -- Connections table
 CREATE TABLE IF NOT EXISTS connections (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  recruiter_id uuid REFERENCES profiles(id),
-  applicant_id uuid REFERENCES profiles(id),
-  status text DEFAULT 'pending',
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  UNIQUE(recruiter_id, applicant_id)
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  recruiter_id UUID REFERENCES profiles(id),
+  applicant_id UUID REFERENCES profiles(id),
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
 
 -- Messages table
 CREATE TABLE IF NOT EXISTS messages (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  connection_id uuid REFERENCES connections(id),
-  sender_id uuid REFERENCES profiles(id),
-  content text NOT NULL,
-  created_at timestamptz DEFAULT now(),
-  read_at timestamptz
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  connection_id UUID REFERENCES connections(id),
+  sender_id UUID REFERENCES profiles(id),
+  content TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  read_at TIMESTAMP WITH TIME ZONE
 );
 
 -- Jobs table
@@ -152,3 +151,21 @@ CREATE POLICY "Recruiters can update own jobs"
     auth.uid() = recruiter_id AND
     (SELECT role FROM profiles WHERE id = auth.uid()) = 'recruiter'
   );
+
+-- Insert sample data
+INSERT INTO profiles (id, role, full_name, headline, company)
+VALUES 
+  ('d7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f', 'recruiter', 'Sarah Wilson', 'Senior Recruiter', 'Tech Corp'),
+  ('e8c6f6c6-9d8g-5d8g-9d8g-9d8g9d8g9d8g', 'applicant', 'John Doe', 'Software Engineer', NULL);
+
+INSERT INTO connections (id, recruiter_id, applicant_id, status)
+VALUES 
+  ('f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h', 
+   'd7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f',
+   'e8c6f6c6-9d8g-5d8g-9d8g-9d8g9d8g9d8g',
+   'accepted');
+
+INSERT INTO messages (connection_id, sender_id, content)
+VALUES 
+  ('f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h', 'd7b5e5b5-8c7f-4c7f-8c7f-8c7f8c7f8c7f', 'Hi John, I saw your profile and would like to discuss some opportunities.'),
+  ('f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h', 'e8c6f6c6-9d8g-5d8g-9d8g-9d8g9d8g9d8g', 'Hi Sarah, I would be interested in learning more about the opportunities.');

@@ -48,17 +48,31 @@ export const createJob = async (job: Database['public']['Tables']['jobs']['Inser
 
 // Connections operations
 export const getConnections = async (userId: string) => {
-  const { data, error } = await supabase
-    .from('connections')
-    .select(`
-      *,
-      recruiter:profiles!connections_recruiter_id_fkey(*),
-      applicant:profiles!connections_applicant_id_fkey(*)
-    `)
-    .or(`recruiter_id.eq.${userId},applicant_id.eq.${userId}`)
-  
-  if (error) throw error
-  return data
+  try {
+    console.log('Database: Fetching connections for user:', userId);
+    const { data, error } = await supabase
+      .from('connections')
+      .select(`
+        *,
+        recruiter:profiles(id, full_name, role, headline, avatar_url),
+        applicant:profiles(id, full_name, role, headline, avatar_url)
+      `)
+      .or('recruiter_id.eq.' + userId + ',applicant_id.eq.' + userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Database: Error fetching connections:', error);
+      console.error('Error details:', error.message, error.details, error.hint);
+      throw error;
+    }
+
+    console.log('Database: Successfully fetched connections:', data);
+    return data;
+  } catch (err: any) {
+    console.error('Database: Error in getConnections:', err);
+    console.error('Error details:', err.message, err.details, err.hint);
+    throw err;
+  }
 }
 
 export const createConnection = async (connection: Database['public']['Tables']['connections']['Insert']) => {
@@ -74,17 +88,31 @@ export const createConnection = async (connection: Database['public']['Tables'][
 
 // Messages operations
 export const getMessages = async (connectionId: string) => {
-  const { data, error } = await supabase
-    .from('messages')
-    .select(`
-      *,
-      sender:profiles!messages_sender_id_fkey(*)
-    `)
-    .eq('connection_id', connectionId)
-    .order('created_at', { ascending: true })
-  
-  if (error) throw error
-  return data
+  try {
+    console.log('Database: Fetching messages for connection:', connectionId);
+    const { data, error } = await supabase
+      .from('messages')
+      .select(`
+        id,
+        content,
+        created_at,
+        sender_id,
+        sender:profiles(id, full_name, role)
+      `)
+      .eq('connection_id', connectionId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Database: Error fetching messages:', error);
+      throw error;
+    }
+
+    console.log('Database: Successfully fetched messages:', data);
+    return data;
+  } catch (err) {
+    console.error('Database: Error in getMessages:', err);
+    throw err;
+  }
 }
 
 export const createMessage = async (message: Database['public']['Tables']['messages']['Insert']) => {
