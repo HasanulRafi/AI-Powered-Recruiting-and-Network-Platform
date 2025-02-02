@@ -22,6 +22,18 @@ export interface Achievement {
   unlockedAt?: string;
 }
 
+export interface JobRecommendation {
+  title: string;
+  company: string;
+  description: string;
+  matchScore: number;
+  skills: string[];
+  location: string;
+  salary: string;
+  url?: string;
+  posted_date?: string;
+}
+
 // Enhanced AI responses and processing
 export const generateJobDescription = (jobTitle: string, requirements: string[]): string => {
   const templates = [
@@ -232,30 +244,204 @@ export const extractSkillsFromResume = async (text: string): Promise<string[]> =
 };
 
 export const generateInterviewQuestions = (jobTitle: string, skills: string[]): string[] => {
-  const questions = [
-    `Can you describe a challenging project where you used ${skills[0]}?`,
-    `How do you stay current with the latest developments in ${jobTitle}?`,
-    `Tell me about a time you had to learn a new technology quickly.`,
-    `How do you handle disagreements with team members?`,
-    `What's your approach to debugging complex issues?`
+  // Role-specific technical questions based on job title and skills
+  const technicalQuestions = {
+    'software': [
+      `Can you explain how you would implement a scalable system using ${skills[0] || 'modern technologies'}?`,
+      `What's your experience with ${skills[1] || 'software development'} and how have you used it in a challenging project?`,
+      `How would you optimize a system that's experiencing ${skills[2] ? `performance issues with ${skills[2]}` : 'performance bottlenecks'}?`,
+      `Describe your approach to testing and quality assurance when working with ${skills[3] || 'complex systems'}?`,
+      `How do you stay updated with the latest developments in ${skills[4] || 'technology'} and implement them in your work?`
+    ],
+    'data': [
+      `How would you handle a large dataset using ${skills[0] || 'data processing tools'}?`,
+      `Explain your approach to data cleaning and preprocessing when working with ${skills[1] || 'raw data'}?`,
+      `What metrics would you use to evaluate a ${skills[2] || 'machine learning'} model's performance?`,
+      `How would you optimize a query that's performing slowly in ${skills[3] || 'a database'}?`,
+      `Describe a data pipeline you've built using ${skills[4] || 'modern tools'}?`
+    ],
+    'frontend': [
+      `How do you ensure responsive design when working with ${skills[0] || 'frontend frameworks'}?`,
+      `What's your approach to state management in ${skills[1] || 'modern web applications'}?`,
+      `How do you optimize performance in applications built with ${skills[2] || 'JavaScript frameworks'}?`,
+      `Describe your experience with ${skills[3] || 'UI/UX design principles'}?`,
+      `How do you handle cross-browser compatibility issues when using ${skills[4] || 'modern CSS features'}?`
+    ]
+  };
+
+  // Behavioral questions tailored to experience level and role
+  const behavioralQuestions = [
+    'Tell me about a time when you had to learn a new technology quickly. What was your approach?',
+    'Describe a situation where you had to work with a difficult team member. How did you handle it?',
+    "Give an example of a project that didn't go as planned. What did you learn from it?",
+    'How do you handle competing priorities and deadlines?',
+    'Tell me about a time you had to explain a complex technical concept to a non-technical stakeholder.'
   ];
-  return questions;
+
+  // Leadership and project management questions
+  const leadershipQuestions = [
+    'How do you approach mentoring junior team members?',
+    'Describe a situation where you had to lead a project without formal authority.',
+    'How do you handle team conflicts and ensure project progress?',
+    'Tell me about a time you had to make a difficult technical decision that impacted the team.',
+    'How do you promote knowledge sharing and best practices within your team?'
+  ];
+
+  // Problem-solving scenarios
+  const problemSolvingQuestions = [
+    'How would you debug a production issue with limited information?',
+    'Describe your approach to making architectural decisions when faced with uncertainty.',
+    'How do you handle technical debt in a fast-paced environment?',
+    'Tell me about a time you had to make a trade-off between perfect code and meeting deadlines.',
+    'How do you approach learning new technologies while maintaining productivity?'
+  ];
+
+  // Select questions based on job title and skills
+  let relevantQuestions: string[] = [];
+  const normalizedTitle = jobTitle.toLowerCase();
+
+  if (normalizedTitle.includes('software') || normalizedTitle.includes('developer') || normalizedTitle.includes('engineer')) {
+    relevantQuestions = [...technicalQuestions.software];
+  } else if (normalizedTitle.includes('data') || normalizedTitle.includes('analyst') || normalizedTitle.includes('scientist')) {
+    relevantQuestions = [...technicalQuestions.data];
+  } else if (normalizedTitle.includes('frontend') || normalizedTitle.includes('ui') || normalizedTitle.includes('web')) {
+    relevantQuestions = [...technicalQuestions.frontend];
+  }
+
+  // Add behavioral questions based on experience level
+  if (normalizedTitle.includes('senior') || normalizedTitle.includes('lead') || normalizedTitle.includes('architect')) {
+    relevantQuestions = [...relevantQuestions, ...leadershipQuestions];
+  }
+
+  // Always include some behavioral and problem-solving questions
+  relevantQuestions = [
+    ...relevantQuestions,
+    ...behavioralQuestions,
+    ...problemSolvingQuestions
+  ];
+
+  // Randomly select questions but ensure a mix of different types
+  return relevantQuestions
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 5)
+    .map(question => question.trim());
 };
 
 export const analyzeMockInterviewResponse = (response: string): InterviewAnalysis => {
-  const analysis: InterviewAnalysis = {
-    score: Math.floor(Math.random() * 30) + 70, // Simulated score between 70-100
-    feedback: [
-      'Clear communication style',
-      'Good use of specific examples',
-      'Demonstrated problem-solving skills'
-    ],
-    improvements: [
-      'Could provide more quantitative results',
-      'Consider using the STAR method more explicitly'
-    ]
+  // Keywords and phrases to look for
+  const positiveIndicators = [
+    'specific example',
+    'result',
+    'impact',
+    'learned',
+    'improved',
+    'team',
+    'success',
+    'solved',
+    'achieved',
+    'collaborated'
+  ];
+
+  const improvementIndicators = [
+    'maybe',
+    'probably',
+    'kind of',
+    'sort of',
+    'like',
+    'um',
+    'uh',
+    'you know'
+  ];
+
+  const starMethodIndicators = {
+    situation: ['when', 'while', 'during', 'at', 'in'],
+    task: ['needed to', 'had to', 'responsible for', 'assigned to'],
+    action: ['i', 'we', 'implemented', 'developed', 'created', 'led', 'managed'],
+    result: ['resulted in', 'achieved', 'improved', 'increased', 'reduced', 'saved']
   };
-  return analysis;
+
+  // Calculate scores
+  const responseWords = response.toLowerCase().split(' ');
+  let score = 0; // Start with 0 instead of 70
+  let feedback: string[] = [];
+  let improvements: string[] = [];
+
+  // Base score based on response length
+  if (response.length < 10) {
+    score = 0;
+    improvements.push('Response is too short. Please provide a complete answer.');
+  } else if (response.length < 50) {
+    score = 20;
+    improvements.push('Response is very brief. Consider providing more details.');
+  } else if (response.length < 100) {
+    score = 40;
+    improvements.push('Response could be more detailed.');
+  } else if (response.length < 200) {
+    score = 60;
+  } else {
+    score = 70;
+    feedback.push('Good response length with detailed explanation');
+  }
+
+  // Check for positive indicators
+  positiveIndicators.forEach(indicator => {
+    if (response.toLowerCase().includes(indicator)) {
+      score += 3;
+      if (score > 100) score = 100;
+    }
+  });
+
+  // Check for improvement indicators
+  improvementIndicators.forEach(indicator => {
+    if (response.toLowerCase().includes(indicator)) {
+      score -= 2;
+      if (score < 0) score = 0;
+    }
+  });
+
+  // Analyze STAR method usage
+  let starScore = 0;
+  Object.entries(starMethodIndicators).forEach(([category, indicators]) => {
+    const hasCategory = indicators.some(indicator => 
+      response.toLowerCase().includes(indicator)
+    );
+    if (hasCategory) {
+      starScore++;
+      score += 5; // Bonus points for using STAR method
+      if (score > 100) score = 100;
+    }
+  });
+
+  // Generate feedback and improvements
+  if (starScore >= 3) {
+    feedback.push('Excellent use of the STAR method');
+  } else {
+    improvements.push('Consider structuring your response using the STAR method (Situation, Task, Action, Result)');
+  }
+
+  if (response.length > 200) {
+    feedback.push('Provided detailed and comprehensive response');
+  }
+
+  if (positiveIndicators.some(indicator => response.toLowerCase().includes(indicator))) {
+    feedback.push('Good use of specific examples and achievements');
+  } else {
+    improvements.push('Include specific examples and quantifiable results');
+  }
+
+  // Ensure at least one feedback and improvement point
+  if (feedback.length === 0) {
+    feedback.push('Clear communication style');
+  }
+  if (improvements.length === 0) {
+    improvements.push('Consider adding more context to your responses');
+  }
+
+  return {
+    score: Math.round(score),
+    feedback,
+    improvements
+  };
 };
 
 export const getSalaryBenchmarks = (title: string, location: string, years: number): SalaryBenchmark => {
@@ -343,4 +529,67 @@ export const calculateLevel = (points: number): { level: number; title: string; 
     title: currentTitle,
     progress: Math.min(100, Math.max(0, progress))
   };
+};
+
+export const generateJobRecommendations = async (skills: string[]): Promise<JobRecommendation[]> => {
+  // Simulated job database
+  const availableJobs: JobRecommendation[] = [
+    {
+      title: "Full Stack Developer",
+      company: "TechCorp",
+      description: "Looking for a skilled developer with experience in modern web technologies.",
+      skills: ["React", "Node.js", "TypeScript", "AWS"],
+      location: "New York, NY",
+      salary: "$100,000 - $150,000",
+      matchScore: 0
+    },
+    {
+      title: "Frontend Engineer",
+      company: "WebSolutions",
+      description: "Join our team to build beautiful and responsive web applications.",
+      skills: ["React", "JavaScript", "CSS", "UI/UX"],
+      location: "San Francisco, CA",
+      salary: "$120,000 - $180,000",
+      matchScore: 0
+    },
+    {
+      title: "Backend Developer",
+      company: "DataTech",
+      description: "Build scalable backend services and APIs.",
+      skills: ["Node.js", "Python", "SQL", "AWS"],
+      location: "Austin, TX",
+      salary: "$90,000 - $140,000",
+      matchScore: 0
+    },
+    {
+      title: "DevOps Engineer",
+      company: "CloudSys",
+      description: "Manage and improve our cloud infrastructure.",
+      skills: ["AWS", "Docker", "Kubernetes", "CI/CD"],
+      location: "Seattle, WA",
+      salary: "$130,000 - $190,000",
+      matchScore: 0
+    },
+    {
+      title: "Machine Learning Engineer",
+      company: "AI Solutions",
+      description: "Develop and deploy machine learning models.",
+      skills: ["Python", "Machine Learning", "TensorFlow", "Data Science"],
+      location: "Boston, MA",
+      salary: "$140,000 - $200,000",
+      matchScore: 0
+    }
+  ];
+
+  // Calculate match scores for each job
+  const recommendedJobs = availableJobs.map(job => ({
+    ...job,
+    matchScore: matchJobToCandidate({ requirements: job.skills }, skills)
+  }));
+
+  // Sort by match score and return top matches
+  return recommendedJobs
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .filter(job => job.matchScore > 30)
+    .slice(0, 3);
 };

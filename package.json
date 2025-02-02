@@ -10,9 +10,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
+<<<<<<< Updated upstream
     "@supabase/supabase-js": "^2.48.1",
     "date-fns": "^3.3.1",
+=======
+    "@tailwindcss/line-clamp": "^0.4.4",
+    "@types/date-fns": "^2.5.3",
+    "axios": "^1.7.9",
+    "cheerio": "^1.0.0",
+    "date-fns": "^3.6.0",
+>>>>>>> Stashed changes
     "lucide-react": "^0.344.0",
+    "openai": "^4.82.0",
+    "pdf-parse": "^1.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.4.1",

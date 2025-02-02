@@ -2,12 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAI } from '../contexts/AIContext';
 import { XIcon, SendIcon, SparklesIcon, MinimizeIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { OpenAIService } from '../services/openai/openaiService';
 
 interface Message {
   id: string;
   type: 'user' | 'ai';
   content: string;
   timestamp: Date;
+  isTyping?: boolean;
 }
 
 interface ChatWindowProps {
@@ -16,22 +18,50 @@ interface ChatWindowProps {
   onMinimize: () => void;
 }
 
+const TypingMessage: React.FC<{ content: string; onComplete: () => void }> = ({ content, onComplete }) => {
+  const [displayedContent, setDisplayedContent] = useState('');
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const words = content.split(' ');
+
+  useEffect(() => {
+    if (currentIndex < words.length) {
+      const timeout = setTimeout(() => {
+        setDisplayedContent(prev => prev + (currentIndex > 0 ? ' ' : '') + words[currentIndex]);
+        setCurrentIndex(prev => prev + 1);
+      }, 50); // Slightly longer delay for word-by-word
+      return () => clearTimeout(timeout);
+    } else {
+      onComplete();
+    }
+  }, [currentIndex, words, onComplete]);
+
+  return <div className="whitespace-pre-wrap">{displayedContent}</div>;
+};
+
 export default function ChatWindow({ isOpen, onClose, onMinimize }: ChatWindowProps) {
   const { aiEnabled } = useAI();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       type: 'ai',
-      content: 'Hi! I\'m your AI assistant. How can I help you today?',
+      content: 'Hi! I\'m your AI assistant. How can I help you with your job search and career development today?',
       timestamp: new Date(),
     },
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatContainerRef.current) {
+      const { scrollHeight, clientHeight } = chatContainerRef.current;
+      const maxScroll = scrollHeight - clientHeight;
+      chatContainerRef.current.scrollTo({
+        top: maxScroll,
+        behavior: 'smooth'
+      });
+    }
   };
 
   useEffect(() => {
@@ -46,7 +76,6 @@ export default function ChatWindow({ isOpen, onClose, onMinimize }: ChatWindowPr
       return;
     }
 
-    // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
@@ -57,113 +86,153 @@ export default function ChatWindow({ isOpen, onClose, onMinimize }: ChatWindowPr
     setInput('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const openAIService = OpenAIService.getInstance();
+      const response = await openAIService.generateChatCompletion(
+        input,
+        "You are a helpful AI career assistant. Provide brief, direct responses focused on job search and career guidance. Keep responses under 3 sentences when possible. Be specific and actionable. If the user's message is nonsensical or unrelated to career guidance, politely ask them to rephrase their question."
+      );
+
+      if (response.error || !response.content || response.content.trim() === '') {
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'ai',
+          content: "I'm not sure I understand your question. Could you please rephrase it, focusing on your career goals or job search needs?",
+          timestamp: new Date(),
+          isTyping: true,
+        };
+        setMessages(prev => [...prev, aiMessage]);
+      } else {
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'ai',
+          content: response.content,
+          timestamp: new Date(),
+          isTyping: true,
+        };
+        setMessages(prev => [...prev, aiMessage]);
+      }
+    } catch (error) {
+      console.error('Error generating AI response:', error);
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
-        content: generateAIResponse(input),
+        content: "I'm having trouble understanding that. Could you please rephrase your question about career guidance or job search?",
         timestamp: new Date(),
+        isTyping: true,
       };
       setMessages(prev => [...prev, aiMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1000);
+    }
   };
 
-  const generateAIResponse = (userInput: string): string => {
-    const responses = [
-      "I understand you're interested in that. Could you tell me more?",
-      "That's an interesting point. Here's what I think...",
-      "I can help you with that. Let me provide some suggestions...",
-      "Based on your question, I recommend...",
-      "I see what you mean. Have you considered...",
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
+  const handleTypingComplete = (messageId: string) => {
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === messageId ? { ...msg, isTyping: false } : msg
+      )
+    );
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-20 right-6 w-96 bg-white rounded-lg shadow-xl z-50 flex flex-col">
+    <div 
+      role="dialog"
+      aria-label="AI Career Assistant Chat"
+      className="fixed bottom-20 right-6 w-96 bg-white rounded-lg shadow-xl z-50 flex flex-col max-h-[80vh]"
+    >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between p-4 border-b bg-white rounded-t-lg">
         <div className="flex items-center space-x-2">
-          <SparklesIcon className="h-5 w-5 text-indigo-600" />
-          <h3 className="font-medium">AI Assistant</h3>
+          <SparklesIcon className="h-5 w-5 text-indigo-600" aria-hidden="true" />
+          <h3 className="font-medium" id="chat-title">AI Career Assistant</h3>
         </div>
         <div className="flex items-center space-x-2">
           <button
             onClick={onMinimize}
-            className="p-1 hover:bg-gray-100 rounded-full"
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            aria-label="Minimize chat"
           >
-            <MinimizeIcon className="h-4 w-4 text-gray-500" />
+            <MinimizeIcon className="h-4 w-4 text-gray-500" aria-hidden="true" />
           </button>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-full"
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            aria-label="Close chat"
           >
-            <XIcon className="h-4 w-4 text-gray-500" />
+            <XIcon className="h-4 w-4 text-gray-500" aria-hidden="true" />
           </button>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-96">
-        {messages.map(message => (
+      <div 
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[300px] max-h-[500px] scroll-smooth"
+        role="log"
+        aria-label="Chat messages"
+      >
+        {messages.map((message) => (
           <div
             key={message.id}
-            className={`flex ${
-              message.type === 'user' ? 'justify-end' : 'justify-start'
-            }`}
+            className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+            role="article"
+            aria-label={`${message.type === 'user' ? 'Your message' : 'AI response'}`}
           >
             <div
-              className={`max-w-[80%] rounded-lg p-3 ${
+              className={`max-w-[80%] rounded-lg p-3 shadow-sm ${
                 message.type === 'user'
                   ? 'bg-indigo-600 text-white'
                   : 'bg-gray-100 text-gray-900'
               }`}
             >
-              <p className="text-sm">{message.content}</p>
-              <p
-                className={`text-xs mt-1 ${
-                  message.type === 'user' ? 'text-indigo-100' : 'text-gray-500'
-                }`}
-              >
+              {message.type === 'ai' && message.isTyping ? (
+                <TypingMessage 
+                  content={message.content} 
+                  onComplete={() => handleTypingComplete(message.id)} 
+                />
+              ) : (
+                <div className="whitespace-pre-wrap">{message.content}</div>
+              )}
+              <div className="text-xs opacity-70 mt-1">
                 {message.timestamp.toLocaleTimeString()}
-              </p>
-            </div>
-          </div>
-        ))}
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-lg p-3">
-              <div className="flex space-x-2">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
               </div>
             </div>
           </div>
-        )}
+        ))}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="p-4 border-t">
+      <form onSubmit={handleSubmit} className="p-4 border-t bg-white rounded-b-lg">
         <div className="flex space-x-2">
           <input
             type="text"
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Type your message..."
-            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
+            disabled={!aiEnabled || isTyping}
+            aria-label="Message input"
+            role="textbox"
           />
           <button
             type="submit"
-            disabled={!input.trim() || !aiEnabled}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            disabled={!aiEnabled || isTyping || !input.trim()}
+            className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            aria-label="Send message"
           >
-            <SendIcon className="h-4 w-4" />
+            <SendIcon className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
       </form>

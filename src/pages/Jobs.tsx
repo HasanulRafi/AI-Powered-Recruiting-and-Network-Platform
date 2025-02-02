@@ -1,377 +1,242 @@
 import React, { useState, useEffect } from 'react';
-import { BriefcaseIcon, MapPinIcon, CurrencyIcon, BuildingIcon, PlusIcon, XIcon } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
-import CreateJobForm from '../components/CreateJobForm';
-
-interface Job {
-  id: string;
-  title: string;
-  company: string;
-  location: string;
-  salary: string;
-  description: string;
-  requirements: string[];
-  type: string;
-  posted: string;
-}
-
-const DEFAULT_JOBS: Job[] = [
-  {
-    id: 'job1',
-    title: 'Senior Software Engineer',
-    company: 'Tech Corp',
-    location: 'San Francisco, CA (Hybrid)',
-    salary: '$150,000 - $200,000',
-    description: 'Join our core platform team to build scalable microservices and cloud infrastructure. You will work on high-impact projects using modern technologies like React, Node.js, and AWS.',
-    requirements: [
-      '5+ years of experience in full-stack development',
-      'Strong knowledge of React, Node.js, and TypeScript',
-      'Experience with cloud services (AWS/GCP/Azure)',
-      'Bachelor\'s degree in Computer Science or equivalent experience'
-    ],
-    type: 'Full-time',
-    posted: '2 days ago'
-  },
-  {
-    id: 'job2',
-    title: 'Machine Learning Engineer',
-    company: 'AI Innovations',
-    location: 'Remote (US)',
-    salary: '$160,000 - $220,000',
-    description: 'Build and deploy machine learning models to power our next-generation recommendation engine. Work with large-scale data and state-of-the-art ML frameworks.',
-    requirements: [
-      'MS/PhD in Computer Science, Machine Learning, or related field',
-      'Experience with PyTorch or TensorFlow',
-      'Strong background in deep learning and NLP',
-      'Production ML deployment experience'
-    ],
-    type: 'Full-time',
-    posted: '1 week ago'
-  },
-  {
-    id: 'job3',
-    title: 'Product Manager',
-    company: 'Growth Startup',
-    location: 'New York, NY (On-site)',
-    salary: '$140,000 - $180,000',
-    description: 'Lead product strategy and execution for our B2B SaaS platform. Work closely with engineering, design, and sales teams to deliver features that delight our enterprise customers.',
-    requirements: [
-      '4+ years of product management experience',
-      'Track record of launching successful B2B products',
-      'Strong analytical and communication skills',
-      'MBA or equivalent experience preferred'
-    ],
-    type: 'Full-time',
-    posted: '3 days ago'
-  },
-  {
-    id: 'job4',
-    title: 'Full Stack Software Engineer',
-    company: 'Future Tech',
-    location: 'Austin, TX (Flexible)',
-    salary: '$130,000 - $180,000',
-    description: 'Build and maintain our customer-facing applications and internal tools. Work with a modern tech stack including React, GraphQL, and Node.js in an agile environment.',
-    requirements: [
-      '3+ years of full-stack development experience',
-      'Proficiency in React and Node.js',
-      'Experience with GraphQL and REST APIs',
-      'Strong problem-solving skills'
-    ],
-    type: 'Full-time',
-    posted: '5 days ago'
-  },
-  {
-    id: 'job5',
-    title: 'Software Engineer - Backend',
-    company: 'Innovation Labs',
-    location: 'Seattle, WA (Hybrid)',
-    salary: '$140,000 - $190,000',
-    description: 'Design and implement scalable backend services for our growing platform. Focus on performance optimization, security, and reliability using Go and PostgreSQL.',
-    requirements: [
-      '4+ years of backend development experience',
-      'Strong knowledge of Go or similar languages',
-      'Experience with distributed systems',
-      'Database design and optimization skills'
-    ],
-    type: 'Full-time',
-    posted: '1 day ago'
-  }
-];
+import RecruitingProgress from '../components/RecruitingProgress';
+import { JobService } from '../lib/services/JobService';
+import type { JobRecommendation } from '../lib/ai';
+import { 
+  BriefcaseIcon, 
+  MapPinIcon, 
+  DollarSignIcon, 
+  StarIcon,
+  SearchIcon,
+  FilterIcon,
+  CalendarIcon,
+  FileTextIcon
+} from 'lucide-react';
+import { format } from 'date-fns';
 
 export default function Jobs() {
   const { profile } = useAuth();
-  const [searchParams] = useSearchParams();
-  const highlightedJobId = searchParams.get('highlight');
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [jobs, setJobs] = useState<Job[]>(() => {
-    const storedJobs = localStorage.getItem('jobs');
-    return storedJobs ? JSON.parse(storedJobs) : DEFAULT_JOBS;
-  });
-  const [appliedJobs, setAppliedJobs] = useState<string[]>(() => {
-    const stored = localStorage.getItem('appliedJobs');
-    return stored ? JSON.parse(stored) : [];
-  });
+  const [jobs, setJobs] = useState<JobRecommendation[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [location, setLocation] = useState('');
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
 
   useEffect(() => {
-    localStorage.setItem('appliedJobs', JSON.stringify(appliedJobs));
-  }, [appliedJobs]);
+    fetchJobs();
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('jobs', JSON.stringify(jobs));
-  }, [jobs]);
-
-  const handleApply = (job: Job) => {
-    // Add to applied jobs
-    setAppliedJobs(prev => [...prev, job.id]);
-
-    if (profile?.role === 'recruiter') {
-      // Only show toast notification for recruiters
-      toast.success(`Application received from John Doe for ${job.title}`);
-      return;
+  const fetchJobs = async () => {
+    setLoading(true);
+    setError(null);
+    
+    const keywords = searchTerm.split(' ').filter(k => k.length > 0);
+    const { data, error: jobError } = await JobService.getInstance().searchJobs(keywords, location);
+    
+    if (jobError) {
+      setError(jobError);
+      setJobs([]);
+    } else {
+      setJobs(data);
     }
-
-    // Create a thank you message for job seekers
-    const messages = JSON.parse(localStorage.getItem('messages') || '[]');
-    const newMessage = {
-      id: Date.now().toString(),
-      connectionId: 'f9d7g7d7-0e9h-6e9h-0e9h-0e9h0e9h0e9h',
-      senderId: profile?.id || '',
-      content: `Thanks for your interest in the ${job.title} position! I'd love to discuss this opportunity with you in more detail. Could you tell me a bit about what interests you most about this role and your relevant experience?`,
-      timestamp: new Date(),
-      read: false,
-      sender: {
-        id: profile?.id || '',
-        full_name: profile?.full_name || 'Recruiter',
-        role: 'recruiter',
-        headline: 'Senior Recruiter',
-        company: 'Tech Corp'
-      },
-      recipient: {
-        id: 'e8c6f6c6-9d8g-5d8g-9d8g-9d8g9d8g9d8g',
-        full_name: 'John Doe',
-        role: 'applicant',
-        headline: 'Software Engineer',
-        company: 'Tech Corp'
-      }
-    };
-    messages.push(newMessage);
-    localStorage.setItem('messages', JSON.stringify(messages));
-
-    // Add notification for job seekers
-    const notifications = JSON.parse(localStorage.getItem('notifications') || '[]');
-    const newNotification = {
-      id: Date.now().toString(),
-      type: 'message' as const,
-      title: 'New message about your job application',
-      description: `${profile?.full_name || 'Recruiter'} wants to discuss your application for the ${job.title} position`,
-      timestamp: new Date(),
-      read: false,
-      actionUrl: `/messages/${newMessage.connectionId}`,
-      sender: {
-        id: profile?.id || '',
-        full_name: profile?.full_name || 'Recruiter',
-        role: 'recruiter',
-        headline: 'Senior Recruiter',
-        company: 'Tech Corp'
-      }
-    };
-    notifications.push(newNotification);
-    localStorage.setItem('notifications', JSON.stringify(notifications));
-
-    // Show success toast for job seekers
-    toast.success('Application submitted successfully!');
+    setLoading(false);
   };
 
-  const handleJobCreated = (newJob: Job) => {
-    setJobs(prevJobs => [newJob, ...prevJobs]);
-    setShowCreateForm(false);
+  const generateResumeBasedJobs = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Extract skills and other relevant information from profile
+      const profileSkills = profile?.skills || [];
+      const profileTitle = profile?.headline || '';
+      const profileExperience = profile?.experience || [];
+      
+      // Build search keywords from profile information
+      let searchKeywords = [...profileSkills];
+      
+      // Add job titles from experience
+      const experienceTitles = profileExperience
+        .map((exp: any) => exp.title)
+        .filter((title: string) => title.length > 0);
+      searchKeywords = [...searchKeywords, ...experienceTitles];
+      
+      // Add current title/headline
+      if (profileTitle) {
+        searchKeywords.push(profileTitle);
+      }
+      
+      // Filter out duplicates and empty strings
+      const uniqueKeywords = [...new Set(searchKeywords)]
+        .filter(keyword => keyword.length > 0)
+        .slice(0, 5); // Take top 5 keywords to avoid overloading
+      
+      // Use default keywords if no profile information is available
+      const finalKeywords = uniqueKeywords.length > 0 
+        ? uniqueKeywords 
+        : ['software', 'developer', 'engineer'];
+      
+      const { data, error: jobError } = await JobService.getInstance().searchJobs(finalKeywords, location);
+      
+      if (jobError) {
+        setError(jobError);
+        setJobs([]);
+      } else {
+        setJobs(data);
+        // Update search term to reflect the skills being searched
+        setSearchTerm(finalKeywords.join(' '));
+      }
+    } catch (err) {
+      setError('Failed to generate resume-based recommendations. Please try again.');
+      setJobs([]);
+    }
+    
+    setLoading(false);
   };
 
-  if (profile?.role === 'recruiter') {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <BriefcaseIcon className="h-6 w-6 text-indigo-600" />
-            <h1 className="text-2xl font-bold text-gray-900">My Job Postings</h1>
-          </div>
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Create New Job
-          </button>
-        </div>
-
-        {showCreateForm ? (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
-            <div className="relative bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <button
-                onClick={() => setShowCreateForm(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-500"
-              >
-                <XIcon className="h-6 w-6" />
-              </button>
-              <CreateJobForm
-                onClose={() => setShowCreateForm(false)}
-                onJobCreated={handleJobCreated}
-              />
-            </div>
-          </div>
-        ) : jobs.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-            <BriefcaseIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-lg font-medium text-gray-900">No jobs posted yet</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Get started by creating your first job posting
-            </p>
-            <div className="mt-6">
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <PlusIcon className="h-5 w-5 mr-2" />
-                Create Job
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {jobs.map((job) => (
-              <div
-                key={job.id}
-                className="bg-white rounded-lg shadow-sm p-6"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">{job.title}</h2>
-                    <div className="mt-1 flex items-center space-x-4">
-                      <div className="flex items-center text-gray-500">
-                        <BuildingIcon className="h-4 w-4 mr-1" />
-                        {job.company}
-                      </div>
-                      <div className="flex items-center text-gray-500">
-                        <MapPinIcon className="h-4 w-4 mr-1" />
-                        {job.location}
-                      </div>
-                      <div className="flex items-center text-gray-500">
-                        <CurrencyIcon className="h-4 w-4 mr-1" />
-                        {job.salary}
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-sm text-gray-500">{job.posted}</span>
-                </div>
-
-                <p className="mt-4 text-gray-600">{job.description}</p>
-
-                <div className="mt-4">
-                  <h3 className="text-sm font-medium text-gray-900">Requirements:</h3>
-                  <ul className="mt-2 list-disc list-inside space-y-1">
-                    {job.requirements.map((req, index) => (
-                      <li key={index} className="text-sm text-gray-600">{req}</li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="mt-6 flex justify-between items-center">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                    {job.type}
-                  </span>
-                  <button
-                    onClick={() => {
-                      const updatedJobs = jobs.filter(j => j.id !== job.id);
-                      setJobs(updatedJobs);
-                      toast.success('Job posting removed');
-                    }}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100"
-                  >
-                    Remove Posting
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
+  const handleSearch = async () => {
+    setLoading(true);
+    setError(null);
+    
+    const keywords = searchTerm.split(' ').filter(k => k.length > 0);
+    const { data, error: jobError } = await JobService.getInstance().searchJobs(keywords, location.trim());
+    
+    if (jobError) {
+      setError(jobError);
+      setJobs([]);
+    } else {
+      setJobs(data);
+    }
+    setLoading(false);
+  };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <BriefcaseIcon className="h-6 w-6 text-indigo-600" />
-          <h1 className="text-2xl font-bold text-gray-900">Jobs</h1>
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      {profile?.role === 'recruiter' && <RecruitingProgress />}
+      
+      {/* Search and Filter Section */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="relative">
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+            <input
+              type="text"
+              placeholder="Search jobs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              className="pl-10 w-full rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+          <div className="relative">
+            <MapPinIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+            <input
+              type="text"
+              placeholder="Location (city, state, or 'remote')"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              className="pl-10 w-full rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSearch}
+              className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Search Jobs
+            </button>
+            <button
+              onClick={generateResumeBasedJobs}
+              className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+              title="Generate job recommendations based on your resume"
+            >
+              <FileTextIcon className="h-5 w-5" />
+              <span className="hidden sm:inline">Match Resume</span>
+            </button>
+          </div>
         </div>
-        <span className="text-sm text-gray-500">{jobs.length} opportunities</span>
       </div>
 
-      <div className="space-y-6">
-        {jobs.map((job) => {
-          const isApplied = appliedJobs.includes(job.id);
-          
-          return (
-            <div
-              key={job.id}
-              className={`bg-white rounded-lg shadow-sm p-6 ${
-                job.id === highlightedJobId ? 'ring-2 ring-indigo-500' : ''
-              }`}
-            >
-              <div className="flex justify-between items-start">
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* Jobs Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {loading ? (
+          // Loading skeleton
+          Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="bg-white rounded-lg shadow-sm p-6 animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+            </div>
+          ))
+        ) : jobs.length > 0 ? (
+          jobs.map((job) => (
+            <div key={`${job.company}-${job.title}`} className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">{job.title}</h2>
-                  <div className="mt-1 flex items-center space-x-4">
-                    <div className="flex items-center text-gray-500">
-                      <BuildingIcon className="h-4 w-4 mr-1" />
-                      {job.company}
-                    </div>
-                    <div className="flex items-center text-gray-500">
-                      <MapPinIcon className="h-4 w-4 mr-1" />
-                      {job.location}
-                    </div>
-                    <div className="flex items-center text-gray-500">
-                      <CurrencyIcon className="h-4 w-4 mr-1" />
-                      {job.salary}
+                  <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">{job.title}</h3>
+                  <p className="text-gray-600">{job.company}</p>
+                </div>
+                {job.matchScore > 0 && (
+                  <div className="flex items-center space-x-1 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full">
+                    <StarIcon className="h-4 w-4" />
+                    <span className="text-sm font-medium">{job.matchScore}% Match</span>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-gray-600 text-sm line-clamp-3 mb-4">{job.description}</p>
+
+              <div className="flex flex-wrap gap-2 mb-4">
+                {job.skills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between text-sm text-gray-500">
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center">
+                    <MapPinIcon className="h-4 w-4 mr-1" />
+                    <span>{job.location}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <CalendarIcon className="h-4 w-4 mr-1" />
+                    <div className="text-sm text-gray-500 mt-2">
+                      Posted {job.posted_date ? format(new Date(job.posted_date), 'MMM d, yyyy') : 'Date not available'}
                     </div>
                   </div>
                 </div>
-                <span className="text-sm text-gray-500">{job.posted}</span>
-              </div>
-
-              <p className="mt-4 text-gray-600">{job.description}</p>
-
-              <div className="mt-4">
-                <h3 className="text-sm font-medium text-gray-900">Requirements:</h3>
-                <ul className="mt-2 list-disc list-inside space-y-1">
-                  {job.requirements.map((req, index) => (
-                    <li key={index} className="text-sm text-gray-600">{req}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="mt-6 flex justify-between items-center">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                  {job.type}
-                </span>
-                <button
-                  onClick={() => !isApplied && handleApply(job)}
-                  disabled={isApplied}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm ${
-                    isApplied
-                      ? 'bg-green-600 hover:bg-green-700 text-white cursor-default'
-                      : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                
+                <a
+                  href={job.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center px-4 py-2 border border-indigo-600 text-sm font-medium rounded-md text-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                  {isApplied ? 'Applied' : 'Apply Now'}
-                </button>
+                  <BriefcaseIcon className="h-4 w-4 mr-2" />
+                  Apply
+                </a>
               </div>
             </div>
-          );
-        })}
+          ))
+        ) : !error && (
+          <div className="text-center text-gray-500">
+            No jobs found. Try adjusting your search terms.
+          </div>
+        )}
       </div>
     </div>
   );
